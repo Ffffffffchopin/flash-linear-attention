@@ -67,7 +67,7 @@ def chunk_dplr_fwd_kernel_o(
         p_h = tl.make_block_ptr(h + (i_tg * H + i_h) * K*V, (K, V), (V, 1), (i_k * BK, i_v * BV), (BK, BV), (1, 0))
         b_qg = tl.load(p_qg, boundary_check=(0, 1))
         b_h = tl.load(p_h, boundary_check=(0, 1))
-        b_o += tl.dot(b_qg, b_h)
+        b_o += tl.dot(b_qg, b_h,allow_tf32=False)
 
     p_Aqk = tl.make_block_ptr(A_qk + (bos * H + i_h) * BT, (T, BT), (H*BT, 1), (i_t * BT, 0), (BT, BT), (1, 0))
     p_Aqb = tl.make_block_ptr(A_qb + (bos * H + i_h) * BT, (T, BT), (H*BT, 1), (i_t * BT, 0), (BT, BT), (1, 0))
@@ -82,7 +82,7 @@ def chunk_dplr_fwd_kernel_o(
     b_Aqb = tl.where(m_s, b_Aqb, 0)
     b_v = tl.load(p_v, boundary_check=(0, 1))
     b_v_new = tl.load(p_v_new, boundary_check=(0, 1))
-    b_o = b_o + tl.dot(b_Aqk.to(b_v.dtype), b_v) + tl.dot(b_Aqb.to(b_v_new.dtype), b_v_new)
+    b_o = b_o + tl.dot(b_Aqk.to(b_v.dtype), b_v,allow_tf32=False) + tl.dot(b_Aqb.to(b_v_new.dtype), b_v_new,allow_tf32=False)
     tl.store(p_o, b_o.to(p_o.dtype.element_ty), boundary_check=(0, 1))
 
 
