@@ -64,8 +64,8 @@ def chunk_rwkv6_fwd_cumsum_kernel(
     p_oe = tl.make_block_ptr(oe + (bos * H + i_h) * S, (T, S), (H*S, 1), (i_t * BT, i_s * BS), (BT, BS), (1, 0))
     # [BT, BS]
     b_s = tl.load(p_s, boundary_check=(0, 1)).to(tl.float32)
-    b_oi = tl.dot(m_i, b_s)
-    b_oe = tl.dot(m_e, b_s)
+    b_oi = tl.dot(m_i, b_s,allow_tf32=False)
+    b_oe = tl.dot(m_e, b_s,allow_tf32=False)
     tl.store(p_oi, b_oi.to(p_oi.dtype.element_ty, fp_downcast_rounding="rtne"), boundary_check=(0, 1))
     tl.store(p_oe, b_oe.to(p_oe.dtype.element_ty, fp_downcast_rounding="rtne"), boundary_check=(0, 1))
 
@@ -168,7 +168,7 @@ def chunk_rwkv6_fwd_A_kernel_intra_sub_inter(
         b_gk = tl.load(p_gk, boundary_check=(0, 1))
         b_kg = b_k * exp(b_gn[:, None] - b_gk)
         # [BC, BC] using tf32 to improve precision here.
-        b_A += tl.dot(b_qg, b_kg)
+        b_A += tl.dot(b_qg, b_kg,allow_tf32=False)
 
     p_A = tl.make_block_ptr(A + (bos*H + i_h)*BT, (T, BT), (H*BT, 1), (i_t * BT + i_i * BC, i_j * BC), (BC, BC), (1, 0))
     tl.store(p_A, b_A.to(A.dtype.element_ty), boundary_check=(0, 1))
@@ -453,7 +453,7 @@ def chunk_rwkv6_bwd_kernel_dh(
         b_q = (b_q * exp(b_gk) * scale).to(b_q.dtype)
         b_gk_last = tl.load(p_gk_last, mask=(i_k * BK + tl.arange(0, BK) < K), other=0.)
         b_dh *= exp(b_gk_last)[:, None]
-        b_dh += tl.dot(b_q, b_do)
+        b_dh += tl.dot(b_q, b_do,allow_tf32=False)
 
     if STORE_INITIAL_STATE_GRADIENT:
         p_dh0 = tl.make_block_ptr(dh0 + i_nh * K*V, (K, V), (V, 1), (i_k * BK, i_v * BV), (BK, BV), (1, 0))
@@ -525,7 +525,7 @@ def chunk_rwkv6_bwd_kernel_intra(
             # [BC, BC]
             b_dA = tl.load(p_dA, boundary_check=(0, 1))
             # [BC, BK]
-            b_dq += tl.dot(b_dA, b_kg)
+            b_dq += tl.dot(b_dA, b_kg,allow_tf32=False)
         b_dq *= exp(b_ge - b_gn[None, :])
 
     o_i = tl.arange(0, BC)
@@ -578,7 +578,7 @@ def chunk_rwkv6_bwd_kernel_intra(
             b_dA = tl.load(p_dA, boundary_check=(0, 1))
             # [BC, BK]
             # (SY 09/17) important to not use bf16 here to have a good precision.
-            b_dk += tl.dot(b_dA, b_qg)
+            b_dk += tl.dot(b_dA, b_qg,allow_tf32=False)
         b_dk *= exp(b_gn[None, :] - b_gk)
     o_dA = bos*H*BT + (i_t * BT + i_i * BC) * H*BT + i_h * BT + i_i * BC + tl.arange(0, BC)
     p_qj = q + (bos + i_t * BT + i_i * BC) * H*K + i_h * K + o_k
@@ -679,8 +679,8 @@ def chunk_rwkv6_bwd_kernel_inter(
         # [BK]
         b_dgk += tl.sum(b_h * b_dh, axis=0)
         # [BT, BK]
-        b_dq += tl.dot(b_do, b_h.to(b_do.dtype))
-        b_dk += tl.dot(b_v, b_dh.to(b_v.dtype))
+        b_dq += tl.dot(b_do, b_h.to(b_do.dtype),allow_tf32=False)
+        b_dk += tl.dot(b_v, b_dh.to(b_v.dtype),allow_tf32=False)
     b_dgk *= exp(b_gn)
     b_dq *= scale
     b_gk = tl.load(p_gk, boundary_check=(0, 1))
