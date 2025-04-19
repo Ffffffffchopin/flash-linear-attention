@@ -89,9 +89,9 @@ def chunk_dplr_fwd_kernel_h(
             b_v = tl.load(p_v, boundary_check=(0, 1))
             b_w = tl.load(p_w, boundary_check=(0, 1))
             b_bg = tl.load(p_bg, boundary_check=(0, 1))
-            b_v2 = tl.dot(b_w, b_h.to(b_w.dtype)) + tl.load(p_u, boundary_check=(0, 1))
-            b_hc += tl.dot(b_kg, b_v)
-            b_hc += tl.dot(b_bg.to(b_hc.dtype), b_v2)
+            b_v2 = tl.dot(b_w, b_h.to(b_w.dtype),allow_tf32=False) + tl.load(p_u, boundary_check=(0, 1))
+            b_hc += tl.dot(b_kg, b_v,allow_tf32=False)
+            b_hc += tl.dot(b_bg.to(b_hc.dtype), b_v2,allow_tf32=False)
             tl.store(p_v_new, b_v2.to(p_v_new.dtype.element_ty), boundary_check=(0, 1))
 
         last_idx = min((i_t + 1) * BT, T) - 1
