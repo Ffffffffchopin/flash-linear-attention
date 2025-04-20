@@ -53,7 +53,7 @@ def chunk_retention(
 
     """
     if head_first:
-        warnings.warn(
+        raise DeprecationWarning(
             "head_first is deprecated and will be removed in a future version. "
             "Please use head_first=False for now instead."
         )

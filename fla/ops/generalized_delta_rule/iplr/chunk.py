@@ -9,8 +9,8 @@ import triton
 import triton.language as tl
 from einops import rearrange
 
-from fla.ops.common.utils import prepare_chunk_indices, prepare_chunk_offsets
 from fla.ops.generalized_delta_rule.iplr.wy_fast import prepare_wy_repr_fwd
+from fla.ops.utils import prepare_chunk_indices, prepare_chunk_offsets
 from fla.utils import autocast_custom_bwd, autocast_custom_fwd, check_shared_mem, input_guard, use_cuda_graph
 
 BKV_LIST = [64, 128] if check_shared_mem() else [32, 64]
@@ -462,7 +462,7 @@ def chunk_iplr_delta_rule(
     assert q.dtype != torch.float32, "ChunkDeltaRuleFunction does not support float32. Please use bfloat16."
 
     if head_first:
-        warnings.warn(
+        raise DeprecationWarning(
             "head_first is deprecated and will be removed in a future version. "
             "Please use head_first=False for now instead."
         )
@@ -479,10 +479,6 @@ def chunk_iplr_delta_rule(
             raise ValueError(
                 f"The batch size is expected to be 1 rather than {q.shape[0]} when using `cu_seqlens`."
                 f"Please flatten variable-length inputs before processing."
-            )
-        if head_first:
-            raise RuntimeError(
-                "Sequences with variable lengths are not supported for head-first mode"
             )
         if initial_state is not None and initial_state.shape[0] != len(cu_seqlens) - 1:
             raise ValueError(

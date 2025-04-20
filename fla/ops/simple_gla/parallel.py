@@ -9,8 +9,8 @@ import triton
 import triton.language as tl
 from einops import rearrange
 
-from fla.ops.common.utils import prepare_chunk_indices
-from fla.ops.utils import chunk_global_cumsum, chunk_local_cumsum
+from fla.ops.utils import prepare_chunk_indices
+from fla.ops.utils.cumsum import chunk_global_cumsum, chunk_local_cumsum
 from fla.ops.utils.op import safe_exp
 from fla.utils import (
     autocast_custom_bwd,
@@ -695,7 +695,7 @@ def parallel_simple_gla(
             Attention scores of shape `[B, H, T, T]` if `output_attentions=True` else `None`
     """
     if head_first:
-        warnings.warn(
+        raise DeprecationWarning(
             "head_first is deprecated and will be removed in a future version. "
             "Please use head_first=False for now instead."
         )
@@ -712,10 +712,6 @@ def parallel_simple_gla(
             raise ValueError(
                 f"The batch size is expected to be 1 rather than {q.shape[0]} when using `cu_seqlens`."
                 f"Please flatten variable-length inputs before processing."
-            )
-        if head_first:
-            raise RuntimeError(
-                "Sequences with variable lengths are not supported for head-first mode"
             )
     if output_attentions:
         assert cu_seqlens is None, "output_attentions=True is not supported with variable-length sequences"

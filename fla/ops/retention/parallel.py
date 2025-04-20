@@ -45,7 +45,7 @@ def parallel_retention(
             Attention scores of shape `[B, H, T, T]` if `output_attentions=True` else `None`
     """
     if head_first:
-        warnings.warn(
+        raise DeprecationWarning(
             "head_first is deprecated and will be removed in a future version. "
             "Please use head_first=False for now instead."
         )

@@ -22,7 +22,7 @@ def fused_recurrent_retention(
     head_first: bool = False
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     if head_first:
-        warnings.warn(
+        raise DeprecationWarning(
             "head_first is deprecated and will be removed in a future version. "
             "Please use head_first=False for now instead."
         )

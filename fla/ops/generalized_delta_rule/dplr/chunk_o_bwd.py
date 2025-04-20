@@ -7,7 +7,7 @@ import torch
 import triton
 import triton.language as tl
 
-from fla.ops.common.utils import prepare_chunk_indices
+from fla.ops.utils import prepare_chunk_indices
 from fla.ops.utils.op import exp
 from fla.utils import check_shared_mem, use_cuda_graph
 
@@ -224,7 +224,7 @@ def chunk_dplr_bwd_o_kernel(
         for BK in BK_LIST
         for BV in BK_LIST
     ],
-    key=['BT', 'BK', 'BV'],
+    key=['BT'],
     use_cuda_graph=use_cuda_graph,
 )
 @triton.jit

@@ -318,7 +318,7 @@ def chunk_dplr_delta_rule(
             Final state of shape `[N, H, K, V]` if `output_final_state=True` else `None`.
     """
     if head_first:
-        warnings.warn(
+        raise DeprecationWarning(
             "head_first is deprecated and will be removed in a future version. "
             "Please use head_first=False for now instead."
         )
@@ -331,7 +331,7 @@ def chunk_dplr_delta_rule(
             "Please verify your input tensor format matches the expected shape [B, T, H, ...]."
         )
     if q.dtype == torch.float32:
-        warnings.warn(
+        raise DeprecationWarning(
             """ChunkDeltaRuleFunction does not support float32. Please use bfloat16.
             If you want to use float32, please solve the issue by yourself."""
         )
@@ -340,10 +340,6 @@ def chunk_dplr_delta_rule(
             raise ValueError(
                 f"The batch size is expected to be 1 rather than {q.shape[0]} when using `cu_seqlens`."
                 f"Please flatten variable-length inputs before processing."
-            )
-        if head_first:
-            raise RuntimeError(
-                "Sequences with variable lengths are not supported for head-first mode"
             )
         if initial_state is not None and initial_state.shape[0] != len(cu_seqlens) - 1:
             raise ValueError(

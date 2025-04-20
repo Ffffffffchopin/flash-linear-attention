@@ -10,8 +10,8 @@ import triton.language as tl
 from einops import rearrange
 
 from fla.ops.common.chunk_h import chunk_fwd_h
-from fla.ops.common.utils import prepare_chunk_indices, prepare_chunk_offsets
 from fla.ops.gla.chunk import chunk_gla_bwd_dA, chunk_gla_bwd_dv, chunk_gla_fwd_o_gk
+from fla.ops.utils import prepare_chunk_indices, prepare_chunk_offsets
 from fla.ops.utils.op import exp
 from fla.utils import autocast_custom_bwd, autocast_custom_fwd, check_shared_mem, input_guard, use_cuda_graph
 
@@ -1263,7 +1263,7 @@ def chunk_rwkv6(
         >>> assert ht.allclose(ht_var)
     """
     if head_first:
-        warnings.warn(
+        raise DeprecationWarning(
             "head_first is deprecated and will be removed in a future version. "
             "Please use head_first=False for now instead."
         )
@@ -1280,10 +1280,6 @@ def chunk_rwkv6(
             raise ValueError(
                 f"The batch size is expected to be 1 rather than {r.shape[0]} when using `cu_seqlens`."
                 f"Please flatten variable-length inputs before processing."
-            )
-        if head_first:
-            raise RuntimeError(
-                "Sequences with variable lengths are not supported for head-first mode"
             )
         if initial_state is not None and initial_state.shape[0] != len(cu_seqlens) - 1:
             raise ValueError(

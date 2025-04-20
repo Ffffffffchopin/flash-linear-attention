@@ -10,10 +10,11 @@ import triton.language as tl
 from einops import rearrange, reduce
 
 from fla.ops.common.chunk_h import chunk_bwd_dh, chunk_fwd_h
-from fla.ops.common.utils import prepare_chunk_indices
 from fla.ops.gla.chunk import chunk_gla_bwd, chunk_gla_fwd
-from fla.ops.utils import chunk_local_cumsum, softmax_bwd, softmax_fwd
+from fla.ops.utils import prepare_chunk_indices
+from fla.ops.utils.cumsum import chunk_local_cumsum
 from fla.ops.utils.op import exp, safe_exp
+from fla.ops.utils.softmax import softmax_bwd, softmax_fwd
 from fla.utils import input_guard
 
 
@@ -1082,7 +1083,7 @@ def chunk_gsa(
         >>> assert hv.allclose(hv_var)
     """
     if head_first:
-        warnings.warn(
+        raise DeprecationWarning(
             "head_first is deprecated and will be removed in a future version. "
             "Please use head_first=False for now instead."
         )
@@ -1099,10 +1100,6 @@ def chunk_gsa(
             raise ValueError(
                 f"The batch size is expected to be 1 rather than {q.shape[0]} when using `cu_seqlens`."
                 f"Please flatten variable-length inputs before processing."
-            )
-        if head_first:
-            raise RuntimeError(
-                "Sequences with variable lengths are not supported for head-first mode"
             )
         if initial_state is not None and initial_state[0].shape[0] != len(cu_seqlens) - 1:
             raise ValueError(
