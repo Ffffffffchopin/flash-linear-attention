@@ -15,8 +15,11 @@ from .hgrn import HGRNAttention
 from .hgrn2 import HGRN2Attention
 from .lightnet import LightNetAttention
 from .linear_attn import LinearAttention
+from .mamba import Mamba
+from .mamba2 import Mamba2
 from .multiscale_retention import MultiScaleRetention
 from .nsa import NativeSparseAttention
+from .path_attn import PaTHAttention
 from .rebased import ReBasedLinearAttention
 from .rwkv6 import RWKV6Attention
 from .rwkv7 import RWKV7Attention
@@ -36,9 +39,12 @@ __all__ = [
     'HGRN2Attention',
     'LightNetAttention',
     'LinearAttention',
+    'Mamba',
+    'Mamba2',
     'MultiScaleRetention',
     'NativeSparseAttention',
     'ReBasedLinearAttention',
     'RWKV6Attention',
     'RWKV7Attention',
+    'PaTHAttention'
 ]
