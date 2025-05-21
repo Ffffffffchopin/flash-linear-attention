@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 
 logger = logging.get_logger(__name__)
 
+def pad_to_length(values, length, fill_value=None):
+    return tuple(values) + (fill_value,) * (length - len(values))
 
 class RWKV7FeedForward(nn.Module):
 
@@ -178,7 +180,7 @@ class RWKV7Block(nn.Module):
     ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         residual = self.pre_norm(hidden_states) if hasattr(self, 'pre_norm') else hidden_states
         hidden_states = self.attn_norm(residual)
-        hidden_states, attentions, past_key_values, v_first = self.attn(
+        hidden_states, attentions, past_key_values, v_first = pad_to_length(self.attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             past_key_values=past_key_values,
@@ -186,7 +188,7 @@ class RWKV7Block(nn.Module):
             output_attentions=output_attentions,
             v_first=v_first,
             **kwargs
-        )
+        ),4)
         if self.config.fuse_norm:
             hidden_states, residual = self.ffn_norm(hidden_states, residual, True)
         else:
