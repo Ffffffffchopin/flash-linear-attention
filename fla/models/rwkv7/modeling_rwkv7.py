@@ -188,7 +188,7 @@ class RWKV7Block(nn.Module):
             output_attentions=output_attentions,
             v_first=v_first,
             **kwargs
-        ),4)
+        ),4,fill_value=v_first)
         if self.config.fuse_norm:
             hidden_states, residual = self.ffn_norm(hidden_states, residual, True)
         else:
