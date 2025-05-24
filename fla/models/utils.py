@@ -95,6 +95,12 @@ class Cache(transformers.cache_utils.Cache):
             self.states.append(state)
         elif self.states[layer_idx]['attn_state'] is None and attn_state is not None :
             self.states[layer_idx]['attn_state'] = attn_state
+            state = dict(
+                recurrent_state=recurrent_state,
+                attn_state=attn_state,
+                conv_state=conv_state,
+                ffn_state=ffn_state
+            )
         else:
             state = self.states[layer_idx]
             if recurrent_state is not None:
