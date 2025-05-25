@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2023-2025, Songlin Yang, Yu Zhang
 
-import warnings
+#import warnings
 from typing import Optional, Tuple
 
 import torch
@@ -288,6 +288,7 @@ def fused_mul_recurrent_rwkv7(
             "Please use head_first=False for now instead."
         )
         r, w, k, v, kk, a = map(lambda x: rearrange(x, 'b h t ... -> b t h ...'), (r, w, k, v, kk, a))
+    ''' 
     if not head_first and r.shape[1] < r.shape[2]:
         warnings.warn(
             f"Input tensor shape suggests potential format mismatch: seq_len ({r.shape[1]}) < num_heads ({r.shape[2]}). "
@@ -295,6 +296,7 @@ def fused_mul_recurrent_rwkv7(
             "when head_first=False was specified. "
             "Please verify your input tensor format matches the expected shape [B, T, H, ...]."
         )
+    '''
     if cu_seqlens is not None:
         if r.shape[0] != 1:
             raise ValueError(
