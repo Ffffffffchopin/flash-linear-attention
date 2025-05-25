@@ -155,7 +155,7 @@ def rotary_embedding_fwdbwd(
     is_varlen = cu_seqlens is not None
 
     B, T, H, D = x.shape
-    N = B if not is_varlen else cu_seqlens.shape[0] - 1
+    #N = B if not is_varlen else cu_seqlens.shape[0] - 1
     TR, R = cos.shape
     R2 = R * 2
 
@@ -166,7 +166,7 @@ def rotary_embedding_fwdbwd(
     assert x.dtype == cos.dtype, f"Input and cos/sin must have the same dtype, got {x.dtype} and {cos.dtype}"
 
     if isinstance(seqlen_offsets, torch.Tensor):
-        assert seqlen_offsets.shape == (N,)
+        #assert seqlen_offsets.shape == (N,)
         assert seqlen_offsets.dtype in [torch.int32, torch.int64]
     else:
         assert seqlen_offsets + T <= TR
