@@ -157,6 +157,14 @@ def unpad_input(
         cu_seqlens_q = torch.arange(batch_size + 1, dtype=torch.int32, device=q.device)
         indices_q = cu_seqlens_q[:-1]
         q = q.squeeze(1)
+    elif q_len == 2:
+    # 每个批次有 2 个查询 token
+        max_seqlen_in_batch_q = 2
+        cu_seqlens_q = torch.arange(
+            0, 2 * batch_size + 1, 2, dtype=torch.int32, device=q.device
+        )  # [0, 2, 4, ..., 2*batch_size]
+        indices_q = torch.arange(0, 2 * batch_size, device=q.device)  # [0, 1, 2, 3, ..., 2*batch_size - 1]
+        q = rearrange(q, "b s ... -> (b s) ...")  # 展平为 [batch_size*2, ...]
     else:
         raise NotImplementedError("We only support either q_len == k_len (prefilling) or q_len == 1 (decoding)")
 
