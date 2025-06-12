@@ -22,6 +22,7 @@ from fla.models.utils import Cache
 from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss
 from fla.modules import GatedMLP as GatedDeltaNetMLP
 from fla.modules import RMSNorm
+from fla.modules.l2warp import l2_warp
 
 if TYPE_CHECKING:
     from transformers.processing_utils import Unpack
@@ -56,6 +57,7 @@ class GatedDeltaNetBlock(nn.Module):
                 expand_v=config.expand_v,
                 head_dim=config.head_dim,
                 num_heads=config.num_heads,
+                num_v_heads=config.num_v_heads,
                 use_gate=config.use_gate,
                 use_short_conv=config.use_short_conv,
                 conv_size=config.conv_size,
@@ -124,7 +126,7 @@ class GatedDeltaNetPreTrainedModel(PreTrainedModel):
         if isinstance(module, GatedDeltaNet):
 
             # --- A_log ---
-            A = torch.empty(module.num_heads, dtype=torch.float32).uniform_(0, 16)
+            A = torch.empty(module.num_v_heads, dtype=torch.float32).uniform_(0, 16)
             with torch.no_grad():
                 if not isinstance(module.A_log, torch.distributed.tensor.DTensor):
                     module.A_log.copy_(torch.log(A))
@@ -138,7 +140,7 @@ class GatedDeltaNetPreTrainedModel(PreTrainedModel):
             dt_max = 0.1
             dt_init_floor = 1e-4
             dt = torch.exp(
-                torch.rand(module.num_heads) * (math.log(dt_max) - math.log(dt_min))
+                torch.rand(module.num_v_heads) * (math.log(dt_max) - math.log(dt_min))
                 + math.log(dt_min)
             )
             dt = torch.clamp(dt, min=dt_init_floor)
@@ -418,7 +420,7 @@ class GatedDeltaNetForCausalLM(GatedDeltaNetPreTrainedModel, GenerationMixin):
         if labels is not None:
             if getattr(self, 'criterion', None) is None:
                 if fuse_linear_and_cross_entropy:
-                    criterion = FusedLinearCrossEntropyLoss()
+                    criterion = FusedLinearCrossEntropyLoss(use_l2warp=self.config.use_l2warp)
                 elif self.config.fuse_cross_entropy:
                     criterion = FusedCrossEntropyLoss(inplace_backward=True)
                 else:
@@ -431,6 +433,7 @@ class GatedDeltaNetForCausalLM(GatedDeltaNetPreTrainedModel, GenerationMixin):
                 loss = criterion(hidden_states, labels, self.lm_head.weight, self.lm_head.bias)
             else:
                 loss = criterion(logits.view(labels.numel(), -1), labels.view(-1))
+                loss = l2_warp(loss, logits) if self.config.use_l2warp else loss
 
         if not return_dict:
             output = (logits,) + outputs[1:]

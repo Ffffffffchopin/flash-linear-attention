@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Optional, Tuple
 
 import torch
@@ -30,10 +31,10 @@ class RWKV7Attention(nn.Module):
         hidden_size: int = 1024,
         head_dim: Optional[int] = 64,
         num_heads: Optional[int] = None,
-        decay_low_rank_dim: int = 64,
-        gate_low_rank_dim: int = 128,
-        a_low_rank_dim: int = 64,
-        v_low_rank_dim: int = 16,
+        decay_low_rank_dim: Optional[int] = None,
+        gate_low_rank_dim: Optional[int] = None,
+        a_low_rank_dim: Optional[int] = None,
+        v_low_rank_dim: Optional[int] = None,
         elementwise_affine: Optional[bool] = True,
         norm_eps: float = 1e-5,
         layer_idx: int = None,
@@ -60,10 +61,30 @@ class RWKV7Attention(nn.Module):
             self.num_heads = num_heads
         self.head_v_dim = int(self.value_dim // self.num_heads)
 
-        self.decay_low_rank_dim = decay_low_rank_dim
-        self.gate_low_rank_dim = gate_low_rank_dim
-        self.a_low_rank_dim = a_low_rank_dim
-        self.v_low_rank_dim = v_low_rank_dim
+        if decay_low_rank_dim is None:
+            decay_low_rank_dim = max(32, int(round((1.8 * (hidden_size**0.5)) / 32) * 32))
+            self.decay_low_rank_dim = decay_low_rank_dim
+        else:
+            self.decay_low_rank_dim = decay_low_rank_dim
+
+        if gate_low_rank_dim is None:
+            gate_low_rank_dim = max(32, int(round((0.6 * (hidden_size**0.8)) / 32) * 32))
+            self.gate_low_rank_dim = gate_low_rank_dim
+        else:
+            self.gate_low_rank_dim = gate_low_rank_dim
+
+        if a_low_rank_dim is None:
+            a_low_rank_dim = max(32, int(round((1.8 * (hidden_size**0.5)) / 32) * 32))
+            self.a_low_rank_dim = a_low_rank_dim
+        else:
+            self.a_low_rank_dim = a_low_rank_dim
+
+        if v_low_rank_dim is None:
+            v_low_rank_dim = max(32, int(round((1.3 * (hidden_size**0.5)) / 32) * 32))
+            self.v_low_rank_dim = v_low_rank_dim
+        else:
+            self.v_low_rank_dim = v_low_rank_dim
+
         self.layer_idx = layer_idx
         self.num_hidden_layers = num_hidden_layers
         self.fuse_norm = fuse_norm
@@ -115,6 +136,13 @@ class RWKV7Attention(nn.Module):
             self.apply(self._initialize_weights)
         for name, module in self.named_modules():
             module._in_rwkv_module = True
+
+        warnings.warn(
+            "According to Bo, you are using a potentially buggy FLA implementation of RWKV. "
+            "If you plan to report any numbers based on this implementation, we strongly recommend "
+            "cross-checking with the official repo: https://github.com/BlinkDL/RWKV-LM. "
+            "Bo may disagree with results reported from this version."
+        )
 
     @torch.no_grad()
     @torch.compiler.disable
@@ -180,6 +208,7 @@ class RWKV7Attention(nn.Module):
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
         v_first: torch.Tensor = None,
+        cu_seqlens: Optional[torch.LongTensor] = None,
         **kwargs
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Cache]]:
         if attention_mask is not None:
@@ -197,7 +226,7 @@ class RWKV7Attention(nn.Module):
 
         if attention_mask is not None:
             hidden_states = hidden_states.mul(attention_mask[:, -seq_len:, None])
-        cu_seqlens = kwargs.get('cu_seqlens', None)
+
         # delta [batch_size, seq_len, hidden_size]
         if last_state is None:
             delta = token_shift(hidden_states, cu_seqlens)

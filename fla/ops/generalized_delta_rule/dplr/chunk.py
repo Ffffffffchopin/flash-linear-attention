@@ -333,9 +333,11 @@ def chunk_dplr_delta_rule(
         )
     '''
     if q.dtype == torch.float32:
-        raise DeprecationWarning(
-            """ChunkDeltaRuleFunction does not support float32. Please use bfloat16.
-            If you want to use float32, please solve the issue by yourself."""
+        warnings.warn(
+            """ChunkDeltaRuleFunction does not support float32 on some platforms. Please use bfloat16/float16.
+            If you want to use float32, please solve the issue by yourself.""",
+            category=RuntimeWarning,
+            stacklevel=2
         )
     if cu_seqlens is not None:
         if q.shape[0] != 1:

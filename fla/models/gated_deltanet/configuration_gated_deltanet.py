@@ -19,6 +19,7 @@ class GatedDeltaNetConfig(PretrainedConfig):
         conv_size: int = 4,
         head_dim: int = 256,
         num_heads: int = 6,
+        num_v_heads: Optional[int] = None,
         max_position_embeddings: int = 2048,
         hidden_ratio: Optional[int] = 4,
         intermediate_size: Optional[int] = None,
@@ -35,6 +36,7 @@ class GatedDeltaNetConfig(PretrainedConfig):
         fuse_norm: bool = True,
         fuse_swiglu: bool = True,
         fuse_cross_entropy: bool = True,
+        use_l2warp: bool = False,
         vocab_size: int = 32000,
         **kwargs
     ):
@@ -46,6 +48,7 @@ class GatedDeltaNetConfig(PretrainedConfig):
         self.conv_size = conv_size
         self.head_dim = head_dim
         self.num_heads = num_heads
+        self.num_v_heads = num_v_heads
         self.max_position_embeddings = max_position_embeddings
 
         self.hidden_ratio = hidden_ratio
@@ -60,6 +63,7 @@ class GatedDeltaNetConfig(PretrainedConfig):
         self.fuse_norm = fuse_norm
         self.fuse_swiglu = fuse_swiglu
         self.fuse_cross_entropy = fuse_cross_entropy
+        self.use_l2warp = use_l2warp
         self.vocab_size = vocab_size
 
         if attn is not None:

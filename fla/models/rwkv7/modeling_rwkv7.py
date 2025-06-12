@@ -21,6 +21,7 @@ from fla.models.rwkv7.configuration_rwkv7 import RWKV7Config
 from fla.models.utils import Cache
 from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, LayerNorm
 from fla.modules.activations import ACT2FN
+from fla.modules.l2warp import l2_warp
 from fla.modules.token_shift import token_shift
 
 if TYPE_CHECKING:
@@ -84,6 +85,7 @@ class RWKV7FeedForward(nn.Module):
         x: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         state: Optional[Cache] = None,
+        cu_seqlens: Optional[torch.LongTensor] = None,
         **kwargs
     ) -> torch.Tensor:
         if attention_mask is not None:
@@ -96,7 +98,6 @@ class RWKV7FeedForward(nn.Module):
             shifted[:, 0] = state[self.layer_idx]['ffn_state'][-1]
             delta = shifted - x
         else:
-            cu_seqlens = kwargs.get('cu_seqlens', None)
             delta = token_shift(x, cu_seqlens)
         if state is not None:
             # no need to update the offset twice
@@ -176,6 +177,7 @@ class RWKV7Block(nn.Module):
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
         v_first: torch.Tensor = None,
+        cu_seqlens: Optional[torch.LongTensor] = None,
         **kwargs,
     ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         residual = self.pre_norm(hidden_states) if hasattr(self, 'pre_norm') else hidden_states
@@ -187,6 +189,7 @@ class RWKV7Block(nn.Module):
             use_cache=use_cache,
             output_attentions=output_attentions,
             v_first=v_first,
+            cu_seqlens=cu_seqlens,
             **kwargs
         ),4,fill_value=v_first)
         if self.config.fuse_norm:
@@ -195,7 +198,9 @@ class RWKV7Block(nn.Module):
             hidden_states = residual + hidden_states
             residual = hidden_states
             hidden_states = self.ffn_norm(hidden_states)
-        hidden_states, past_key_values = self.ffn(hidden_states, attention_mask, past_key_values, **kwargs)
+        hidden_states, past_key_values = self.ffn(
+            hidden_states, attention_mask, past_key_values, cu_seqlens, **kwargs
+        )
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states, attentions, past_key_values, v_first)
@@ -353,6 +358,7 @@ class RWKV7Model(RWKV7PreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        cu_seqlens: Optional[torch.LongTensor] = None,
         **kwargs: Unpack[Dict]
     ) -> Union[Tuple, BaseModelOutputWithPast]:
         if output_attentions:
@@ -397,6 +403,7 @@ class RWKV7Model(RWKV7PreTrainedModel):
                     use_cache,
                     output_attentions,
                     v_first,
+                    cu_seqlens,
                     **kwargs
                 )
             else:
@@ -407,6 +414,7 @@ class RWKV7Model(RWKV7PreTrainedModel):
                     use_cache=use_cache,
                     output_attentions=output_attentions,
                     v_first=v_first,
+                    cu_seqlens=cu_seqlens,
                     **kwargs
                 )
 
@@ -554,7 +562,7 @@ class RWKV7ForCausalLM(RWKV7PreTrainedModel, GenerationMixin):
         if has_labels:
             if getattr(self, 'criterion', None) is None:
                 if fuse_linear_and_cross_entropy:
-                    criterion = FusedLinearCrossEntropyLoss()
+                    criterion = FusedLinearCrossEntropyLoss(use_l2warp=self.config.use_l2warp)
                 elif self.config.fuse_cross_entropy:
                     criterion = FusedCrossEntropyLoss(inplace_backward=True)
                 else:
@@ -571,6 +579,7 @@ class RWKV7ForCausalLM(RWKV7PreTrainedModel, GenerationMixin):
                 loss = criterion(hidden_states, shift_labels, self.lm_head.weight, self.lm_head.bias)
             else:
                 loss = criterion(logits.view(shift_labels.numel(), -1), shift_labels.view(-1))
+                loss = l2_warp(loss, logits) if self.config.use_l2warp else loss
 
         if not return_dict:
             output = (logits,) + outputs[1:]
