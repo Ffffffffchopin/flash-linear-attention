@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 from typing import TYPE_CHECKING, Optional, Tuple
 
 import torch
@@ -14,6 +15,7 @@ from einops import rearrange
 
 from fla.modules import GroupNorm
 from fla.modules.activations import ACT2FN
+from fla.modules.token_shift import token_shift
 from fla.ops.rwkv6 import chunk_rwkv6, fused_recurrent_rwkv6
 
 if TYPE_CHECKING:
@@ -79,7 +81,19 @@ class RWKV6Attention(nn.Module):
         self.o_proj = nn.Linear(self.value_dim, hidden_size, bias=False)
         self.gate_fn = ACT2FN[gate_fn]
 
-        self.apply(self._initialize_weights)
+        try:
+            from transformers.modeling_utils import _init_weights
+        except ImportError:
+            _init_weights = True
+        if _init_weights:
+            self.apply(self._initialize_weights)
+
+        warnings.warn(
+            "According to Bo, you are using a potentially buggy FLA implementation of RWKV. "
+            "If you plan to report any numbers based on this implementation, we strongly recommend "
+            "cross-checking with the official repo: https://github.com/BlinkDL/RWKV-LM. "
+            "Bo may disagree with results reported from this version."
+        )
 
     def _initialize_weights(self, module: nn.Module):
         if getattr(module, "_is_hf_initialized", False):
@@ -99,6 +113,7 @@ class RWKV6Attention(nn.Module):
         past_key_values: Optional[Cache] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
+        cu_seqlens: Optional[torch.LongTensor] = None,
         **kwargs
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Cache]]:
         if attention_mask is not None:
@@ -118,23 +133,26 @@ class RWKV6Attention(nn.Module):
 
         if attention_mask is not None:
             hidden_states = hidden_states.mul_(attention_mask[:, -hidden_states.shape[-2]:, None])
+
         if hidden_states.shape[1] == 1 and last_state is not None:
             shifted = last_state['conv_state'].unsqueeze(1)
+            delta = shifted - hidden_states
+        elif last_state is None:
+            delta = token_shift(hidden_states, cu_seqlens)
         else:
             shifted = self.time_shift(hidden_states)
-            if last_state is not None:
-                shifted[:, 0] = last_state['conv_state']
+            shifted[:, 0] = last_state['conv_state']
+            delta = shifted - hidden_states
 
-        delta = shifted - hidden_states
-        x = self.x_proj[0](hidden_states, delta).view(batch_size, seq_len, -1, self.proj_low_rank_dim)
+        x = self.x_proj[0](hidden_states, delta, cu_seqlens).view(batch_size, seq_len, -1, self.proj_low_rank_dim)
         x = torch.einsum('b t n r, h n r-> b t n h', self.x_proj[1](x), self.x_proj[2].weight.view(hidden_size, 5, -1))
 
         r, w, k, v, g = x.add_(self.x_bias).unbind(-2)
-        r = self.r_proj(hidden_states, r, delta)
-        w = self.w_proj(hidden_states, w, delta)
-        k = self.k_proj(hidden_states, k, delta)
-        v = self.v_proj(hidden_states, v, delta)
-        g = self.g_proj(hidden_states, g, delta)
+        r = self.r_proj(hidden_states, r, delta, cu_seqlens)
+        w = self.w_proj(hidden_states, w, delta, cu_seqlens)
+        k = self.k_proj(hidden_states, k, delta, cu_seqlens)
+        v = self.v_proj(hidden_states, v, delta, cu_seqlens)
+        g = self.g_proj(hidden_states, g, delta, cu_seqlens)
 
         # dealing with left-padding
         if attention_mask is not None:
@@ -145,7 +163,7 @@ class RWKV6Attention(nn.Module):
         u = self.bonus
 
         recurrent_state = last_state['recurrent_state'] if last_state is not None else None
-        cu_seqlens = kwargs.get('cu_seqlens', None)
+
         if mode == 'fused_recurrent':
             o, recurrent_state = fused_recurrent_rwkv6(
                 r=r,
@@ -220,7 +238,12 @@ class LoRA(nn.Module):
             self.activation,
             nn.Linear(low_rank_dim, output_dim, bias=bias)
         )
-        self.apply(self._initialize_weights)
+        try:
+            from transformers.modeling_utils import _init_weights
+        except ImportError:
+            _init_weights = True
+        if _init_weights:
+            self.apply(self._initialize_weights)
 
     def __repr__(self) -> str:
         s = f"{self.__class__.__name__}("
@@ -297,12 +320,10 @@ class LerpLinear(nn.Module):
         s += ")"
         return s
 
-    def forward(self, x: torch.Tensor, delta: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, delta: Optional[torch.Tensor] = None,
+                cu_seqlens: Optional[torch.LongTensor] = None) -> torch.Tensor:
         if delta is None:
-            shifted = self.time_shift(x)
-            if len(shifted.shape) == 2:
-                shifted = shifted.unsqueeze(1)
-            delta = shifted - x
+            delta = token_shift(x, cu_seqlens)
         return self.linear(x + delta * self.mu)
 
 
@@ -333,10 +354,9 @@ class DDLerpLinear(nn.Module):
         s += ")"
         return s
 
-    def forward(self, x: torch.Tensor, mu: torch.Tensor, delta: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, mu: torch.Tensor,
+                delta: Optional[torch.Tensor] = None,
+                cu_seqlens: Optional[torch.LongTensor] = None) -> torch.Tensor:
         if delta is None:
-            shifted = self.time_shift(x)
-            if len(shifted.shape) == 2:
-                shifted = shifted.unsqueeze(1)
-            delta = shifted - x
+            delta = token_shift(x, cu_seqlens)
         return self.linear(x + delta * mu)

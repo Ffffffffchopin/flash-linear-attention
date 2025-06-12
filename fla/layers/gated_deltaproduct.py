@@ -119,21 +119,18 @@ class GatedDeltaProduct(nn.Module):
             ]
         )
         if use_short_conv:
-            self.q_conv1ds = nn.ModuleList(
-                [
-                    ShortConvolution(
-                        hidden_size=self.key_dim,
-                        kernel_size=conv_size,
-                        activation="silu",
-                    )
-                    for _ in range(num_householder)
-                ]
+            self.q_conv1d = ShortConvolution(
+                hidden_size=self.key_dim,
+                kernel_size=conv_size,
+                bias=conv_bias,
+                activation="silu",
             )
             self.k_conv1ds = nn.ModuleList(
                 [
                     ShortConvolution(
                         hidden_size=self.key_dim,
                         kernel_size=conv_size,
+                        bias=conv_bias,
                         activation="silu",
                     )
                     for _ in range(num_householder)
@@ -144,6 +141,7 @@ class GatedDeltaProduct(nn.Module):
                     ShortConvolution(
                         hidden_size=self.value_dim,
                         kernel_size=conv_size,
+                        bias=conv_bias,
                         activation="silu",
                     )
                     for _ in range(num_householder)
@@ -229,6 +227,13 @@ class GatedDeltaProduct(nn.Module):
                     if attention_mask is not None
                     else None
                 )
+                if i == self.num_householder - 1:
+                    q, conv_state_q = self.q_conv1d(
+                        x=self.q_proj(hidden_states),
+                        mask=conv_mask,
+                        cache=conv_state_q,
+                        output_final_state=use_cache,
+                    )
 
                 k, conv_state_k = self.k_conv1ds[i](
                     x=self.k_projs[i](hidden_states),
@@ -246,6 +251,8 @@ class GatedDeltaProduct(nn.Module):
             else:
                 k = self.silu(self.k_projs[i](hidden_states))
                 v = self.silu(self.v_projs[i](hidden_states))
+                if i == self.num_householder - 1:
+                    q = self.silu(self.q_proj(hidden_states))
 
             ks.append(k)
             vs.append(v)
@@ -259,15 +266,6 @@ class GatedDeltaProduct(nn.Module):
                 beta = beta * 2
             betas.append(beta)
 
-        if self.use_short_conv:
-            q, conv_state_q = self.q_conv1ds[0](
-                x=self.q_proj(hidden_states),
-                mask=conv_mask,
-                cache=conv_state_q,
-                output_final_state=use_cache,
-            )
-        else:
-            q = self.silu(self.q_proj(hidden_states))
         q = interleave_multiple_sequences(
             [torch.zeros_like(q)] * (self.num_householder - 1) + [q]
         )
