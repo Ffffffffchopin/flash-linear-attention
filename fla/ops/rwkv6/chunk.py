@@ -168,7 +168,7 @@ def chunk_rwkv6_fwd_A_kernel_intra_sub_inter(
         b_gk = tl.load(p_gk, boundary_check=(0, 1))
         b_kg = b_k * exp(b_gn[:, None] - b_gk)
         # [BC, BC] using tf32 to improve precision here.
-        b_A += tl.dot(b_qg, b_kg,,allow_tf32=False)
+        b_A += tl.dot(b_qg, b_kg,allow_tf32=False)
 
     p_A = tl.make_block_ptr(A + (bos*H + i_h)*BT, (T, BT), (H*BT, 1), (i_t * BT + i_i * BC, i_j * BC), (BC, BC), (1, 0))
     tl.store(p_A, b_A.to(A.dtype.element_ty), boundary_check=(0, 1))
