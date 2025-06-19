@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2023-2025, Songlin Yang, Yu Zhang
 
-#import warnings
+import warnings
 from typing import Optional
 
 import torch
@@ -328,7 +328,7 @@ def chunk_dplr_delta_rule(
             "when head_first=False was specified. "
             "Please verify your input tensor format matches the expected shape [B, T, H, ...]."
         )
-    '''
+    
     if q.dtype == torch.float32:
         warnings.warn(
             """ChunkDeltaRuleFunction does not support float32 on some platforms. Please use bfloat16/float16.
