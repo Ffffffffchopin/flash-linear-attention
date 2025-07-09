@@ -166,7 +166,19 @@ def unpad_input(
         indices_q = torch.arange(0, 2 * batch_size, device=q.device)  # [0, 1, 2, 3, ..., 2*batch_size - 1]
         q = rearrange(q, "b s ... -> (b s) ...")  # 展平为 [batch_size*2, ...]
     else:
-        raise NotImplementedError("We only support either q_len == k_len (prefilling) or q_len == 1 (decoding)")
+        #raise NotImplementedError("We only support either q_len == k_len (prefilling) or q_len == 1 (decoding)")
+        # 解码阶段：query 长度任意 (q_len != seq_len)
+        # 假设 query 没有 padding (每个序列的所有 query token 都是有效的)
+        max_seqlen_in_batch_q = q_len
+        # 创建连续的 query 索引 [0, 1, ..., batch_size * q_len - 1]
+        indices_q = torch.arange(0, batch_size * q_len, device=q.device)
+        # 生成累积序列长度 [0, q_len, 2*q_len, ..., batch_size * q_len]
+        cu_seqlens_q = torch.arange(
+            0, (batch_size + 1) * q_len, q_len, 
+            dtype=torch.int32, device=q.device
+        )
+        # 展平 query 并移除 padding (直接展平因为假设无 padding)
+        q = rearrange(q, "b s ... -> (b s) ...")
 
     if keepdim:
         q = q.unsqueeze(0)
