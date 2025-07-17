@@ -30,8 +30,8 @@ def chunk_gated_delta_rule_fwd(
     # obtain WY representation. u is actually the new v.
     A = chunk_scaled_dot_kkt_fwd(
         k=k,
+        g=g,
         beta=beta,
-        g_cumsum=g,
         cu_seqlens=cu_seqlens,
         output_dtype=torch.float32
     )
@@ -45,7 +45,7 @@ def chunk_gated_delta_rule_fwd(
         v=v,
         beta=beta,
         A=A,
-        g_cumsum=g,
+        g=g,
         cu_seqlens=cu_seqlens,
     )
     h, v_new, final_state = chunk_gated_delta_rule_fwd_h(
@@ -87,7 +87,7 @@ def chunk_gated_delta_rule_bwd(
         v=v,
         beta=beta,
         A=A,
-        g_cumsum=g,
+        g=g,
         cu_seqlens=cu_seqlens,
     )
     h, v_new, _ = chunk_gated_delta_rule_fwd_h(
@@ -301,7 +301,7 @@ def chunk_gated_delta_rule(
     assert len(beta.shape) == 3, "beta must be of shape [B, T, H] if head_first=False, or [B, H, T] otherwise."
 
     if head_first:
-        raise DeprecationWarning(
+        warnings.warn(
             "head_first is deprecated and will be removed in a future version. "
             "Please use head_first=False for now instead."
         )
