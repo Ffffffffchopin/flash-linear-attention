@@ -22,16 +22,22 @@ class IndexFirstAxis(torch.autograd.Function):
         second_dim = other_shape.numel()
         # TD [2022-03-04] For some reason torch.gather is a bit faster than indexing.
         # return x[indices]
-        return torch.gather(
-            rearrange(x, "b ... -> b (...)"), 0, repeat(indices, "z -> z d", d=second_dim)
-        ).reshape(-1, *other_shape)
+        #return torch.gather(
+            #rearrange(x, "b ... -> b (...)"), 0, repeat(indices, "z -> z d", d=second_dim)
+        #).reshape(-1, *other_shape)
+        # 将 x 的形状从 [b, s1, s2, ...] 转换为 [b, d]（d = s1 * s2 * ...）
+        x_flat = rearrange(x, "b ... -> b (...)")
+        # 直接使用索引提取数据，等效于 torch.gather(..., 0, indices.unsqueeze(1).repeat(1, d))
+        selected = x_flat[indices]
+        return selected.reshape(-1, *other_shape)
 
     @staticmethod
     def backward(ctx, do):
         (indices,) = ctx.saved_tensors
         assert do.ndim >= 2
         other_shape = do.shape[1:]
-        do = rearrange(do, "b ... -> b (...)")
+        #do = rearrange(do, "b ... -> b (...)")
+        do_flat = rearrange(do, "b ... -> b (...)")
         dx = torch.zeros(
             [ctx.first_axis_dim, do.shape[1]],
             device=do.device,
@@ -39,7 +45,8 @@ class IndexFirstAxis(torch.autograd.Function):
         )
         # TD [2022-03-04] For some reason torch.scatter is a bit faster than indexing.
         # dx[indices] = do
-        dx.scatter_(0, repeat(indices, "z -> z d", d=do.shape[1]), do)
+        #dx.scatter_(0, repeat(indices, "z -> z d", d=do.shape[1]), do)
+        dx[indices] = do_flat
         return dx.reshape(ctx.first_axis_dim, *other_shape), None
 
 
