@@ -34,7 +34,8 @@ class IndexFirstAxis(torch.autograd.Function):
             selected = x_flat[indices]
             return selected.reshape(-1, *other_shape)
         except Exception as e:
-            print("indices:", indices)
+            print("indices:", indices.shape, indices.dtype, indices.device,)
+            print('max', indices.max().item(), 'min', indices.min().item())
             print("x shape:", x.shape)
             print("x_flat shape:", x_flat.shape)
             raise IndexError("Index out of bounds for the input tensor.") from e
