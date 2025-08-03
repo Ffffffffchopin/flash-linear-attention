@@ -6,7 +6,9 @@
 from typing import Tuple
 
 import torch
-from einops import rearrange, repeat
+#from einops import rearrange, repeat
+from einops import rearrange
+
 
 from fla.ops.utils.index import prepare_cu_seqlens_from_mask, prepare_lens_from_mask
 from fla.utils import tensor_cache
@@ -19,7 +21,7 @@ class IndexFirstAxis(torch.autograd.Function):
         ctx.save_for_backward(indices)
         assert x.ndim >= 2
         ctx.first_axis_dim, other_shape = x.shape[0], x.shape[1:]
-        second_dim = other_shape.numel()
+        #second_dim = other_shape.numel()
         # TD [2022-03-04] For some reason torch.gather is a bit faster than indexing.
         # return x[indices]
         #return torch.gather(
@@ -28,8 +30,14 @@ class IndexFirstAxis(torch.autograd.Function):
         # 将 x 的形状从 [b, s1, s2, ...] 转换为 [b, d]（d = s1 * s2 * ...）
         x_flat = rearrange(x, "b ... -> b (...)")
         # 直接使用索引提取数据，等效于 torch.gather(..., 0, indices.unsqueeze(1).repeat(1, d))
-        selected = x_flat[indices]
-        return selected.reshape(-1, *other_shape)
+        try:
+            selected = x_flat[indices]
+            return selected.reshape(-1, *other_shape)
+        except Exception as e:
+            print("indices:", indices)
+            print("x shape:", x.shape)
+            print("x_flat shape:", x_flat.shape)
+            raise IndexError("Index out of bounds for the input tensor.") from e
 
     @staticmethod
     def backward(ctx, do):
