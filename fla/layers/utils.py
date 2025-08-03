@@ -22,6 +22,11 @@ class IndexFirstAxis(torch.autograd.Function):
         second_dim = other_shape.numel()
         # TD [2022-03-04] For some reason torch.gather is a bit faster than indexing.
         # return x[indices]
+        print("indices", indices, "indices.shape", indices.shape)
+        print("x.shape", x.shape)
+        print("second_dim", second_dim)
+        print("other_shape", other_shape)
+        
         return torch.gather(
             rearrange(x, "b ... -> b (...)"), 0, repeat(indices, "z -> z d", d=second_dim)
         ).reshape(-1, *other_shape)
@@ -141,7 +146,11 @@ def unpad_input(
     """
     indices_k, cu_seqlens_k, max_seqlen_in_batch_k = get_unpad_data(attention_mask)
     batch_size, seq_len, *_ = states[0].shape
-
+    print("batch_size", batch_size)
+    print("seq_len", seq_len)
+    print('indices_k', indices_k)
+    print('cu_seqlens_k', cu_seqlens_k)
+    print('max_seqlen_in_batch_k', max_seqlen_in_batch_k)
     state = tuple(
         index_first_axis(rearrange(s, "b s ... -> (b s) ..."), indices_k)
         for s in states

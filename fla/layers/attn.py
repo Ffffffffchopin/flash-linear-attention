@@ -84,6 +84,7 @@ class Attention(nn.Module):
         use_cache: bool = False,
         **kwargs,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        print("层数",self.layer_idx)
         if attention_mask is not None:
             assert len(attention_mask.shape) == 2, (
                 "Expected attention_mask as a 0-1 matrix with shape [batch_size, seq_len] "
@@ -92,31 +93,40 @@ class Attention(nn.Module):
             )
 
         batch_size, q_len, _ = hidden_states.size()
-
+        print("批次大小",batch_size)
+        print("查询长度",q_len)
+        print("隐藏状态形状",_)
         q = rearrange(self.q_proj(hidden_states), '... (h d) -> ... h d', d=self.head_dim)
         k = rearrange(self.k_proj(hidden_states), '... (h d) -> ... h d', d=self.head_dim)
         v = rearrange(self.v_proj(hidden_states), '... (h d) -> ... h d', d=self.head_dim)
+        print("q shape", q.shape)
+        print('k shape', k.shape)
+        print('v shape', v.shape)
 
         if self.qk_norm:
             q, k = self.q_norm(q), self.k_norm(k)
 
         # equivalent to cu_seqlens in `flash_attn`
         cu_seqlens = kwargs.get('cu_seqlens', None)
-
+        print("cu_seqlens",cu_seqlens)
         seqlen_offset, max_seqlen = 0, q_len
         if past_key_values is not None:
             seqlen_offset = past_key_values.get_seq_length(self.layer_idx)
             max_seqlen = q.shape[1] + seqlen_offset
-
+            print("seqlen_offset before",seqlen_offset)
+            print("max_seqlen before",max_seqlen)
             if attention_mask is not None:
                 # to deliminate the offsets of padding tokens
                 seqlen_offset = seqlen_offset + prepare_lens_from_mask(attention_mask) - attention_mask.shape[-1]
                 max_seqlen = q.shape[1] + max(seqlen_offset)
-
+            print("seqlen_offset after",seqlen_offset)
+            print("max_seqlen after",max_seqlen)
         if self.max_position_embeddings is not None:
             max_seqlen = max(max_seqlen, self.max_position_embeddings)
         q, k = self.rotary(q, k, seqlen_offset=seqlen_offset, max_seqlen=max_seqlen, cu_seqlens=cu_seqlens)
-
+        print("q shape", q.shape)
+        print('k_shape', k.shape)
+        print('v_shape', v.shape)
         if past_key_values is not None:
             cache_has_content = past_key_values.get_seq_length(self.layer_idx) > 0
             k_cached, v_cached = past_key_values.update(
@@ -129,14 +139,17 @@ class Attention(nn.Module):
                 k, v = k_cached, v_cached
                 k = rearrange(k, '... (h d) -> ... h d', d=self.head_dim)
                 v = rearrange(v, '... (h d) -> ... h d', d=self.head_dim)
-
+        print("k shape after cache", k.shape)
+        print("v shape after cache", v.shape)
         if flash_attn_func is None:
             raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
 
         # Contains at least one padding token in the sequence
         if attention_mask is not None:
             if q.shape[1] == 1 and self.window_size is not None:
+                print("正在decode")
                 attention_mask = attention_mask[:, -self.window_size:]
+            print('attention_mask shape', attention_mask.shape)
             q, (k, v), indices_q, cu_seqlens, max_seq_lens = unpad_input(q, (k, v), attention_mask, q_len)
             cu_seqlens_q, cu_seqlens_k = cu_seqlens
             max_seqlen_q, max_seqlen_k = max_seq_lens
